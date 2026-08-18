@@ -1,0 +1,26 @@
+# Everything in this repo is owned by the maintainer.
+# With "Require review from Code Owners" enabled in branch protection,
+# any PR touching these paths needs the maintainer's approval.
+*       @Wahab901278
+
+# Community folders have no code owner, so contribution PRs are not blocked
+# on a code-owner review. They still need the maintainer to click Merge, and
+# must pass the "Restrict contributions" workflow.
+/week01-see-it-work/community_contributions/
+/week02-python-data-toolkit/community_contributions/
+/week03-regression/community_contributions/
+/week04-classification-and-deployment/community_contributions/
+/week05-deep-learning-and-llms/community_contributions/
+/week06-multi-model-uis-and-rag-concepts/community_contributions/
+/week07-build-and-evaluate-rag/community_contributions/
+/week08-fine-tuning/community_contributions/
+/week09-agent-foundations/community_contributions/
+/week10-deep-research-agent/community_contributions/
+/week11-crewai/community_contributions/
+/week12-mcp-and-mvp/community_contributions/
+/week13-ship-it/community_contributions/
+/demo-day/community_contributions/
+
+# The week README inside each community folder stays maintainer-owned.
+/week*/community_contributions/README.md   @Wahab901278
+/demo-day/community_contributions/README.md @Wahab901278

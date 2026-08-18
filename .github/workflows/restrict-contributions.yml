@@ -1,0 +1,75 @@
+name: Restrict contributions
+
+# Community PRs may only touch files inside a week*/community_contributions/ folder.
+# The repository owner and org members are exempt.
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  check-paths:
+    runs-on: ubuntu-latest
+    if: >-
+      github.event.pull_request.author_association != 'OWNER' &&
+      github.event.pull_request.author_association != 'MEMBER' &&
+      github.event.pull_request.author_association != 'COLLABORATOR'
+    steps:
+      - name: List changed files
+        id: changed
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          gh api --paginate "repos/$REPO/pulls/$PR/files" --jq '.[].filename' > changed.txt
+          echo "Changed files:"
+          cat changed.txt
+
+      - name: Enforce community_contributions path
+        run: |
+          # Allowed: week<NN>-<slug>/community_contributions/<handle>/<file>
+          #      or: demo-day/community_contributions/<handle>/<file>
+          # The trailing "[^/]+/.+" requires your own subfolder, so the week's
+          # own community_contributions/README.md cannot be edited.
+          pattern='^(week[0-9]{2}-[a-z0-9-]+|demo-day)/community_contributions/[^/]+/.+'
+          bad=$(grep -vE "$pattern" changed.txt || true)
+          if [ -n "$bad" ]; then
+            echo "::error::PR touches files outside a community_contributions/<your-handle>/ folder"
+            echo "Disallowed files:"
+            echo "$bad" | sed 's/^/  - /'
+            echo ""
+            echo "Community PRs may only add files under:"
+            echo "  <week-folder>/community_contributions/<your-github-handle>/..."
+            echo "For example:"
+            echo "  week03-regression/community_contributions/your-handle/notebook.ipynb"
+            exit 1
+          fi
+          echo "All changed files are inside community_contributions. OK."
+
+      - name: Block edits to other contributors' folders
+        run: |
+          # Each contributor gets one subfolder. A PR may only touch one.
+          folders=$(cut -d/ -f1-3 changed.txt | sort -u)
+          count=$(echo "$folders" | wc -l | tr -d ' ')
+          if [ "$count" -gt 1 ]; then
+            echo "::error::PR touches more than one contributor folder"
+            echo "$folders" | sed 's/^/  - /'
+            echo "Open a separate PR per contributor folder."
+            exit 1
+          fi
+          echo "Single contributor folder: $folders"
+
+      - name: Reject secret-looking files
+        run: |
+          bad=$(grep -iE '(^|/)(\.env($|\..*)|.*\.pem|.*\.key|api-keys?/)' changed.txt || true)
+          if [ -n "$bad" ]; then
+            echo "::error::PR appears to contain secrets. Remove them and rotate the keys."
+            echo "$bad" | sed 's/^/  - /'
+            exit 1
+          fi
+          echo "No secret-looking filenames. OK."
