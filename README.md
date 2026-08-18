@@ -41,13 +41,28 @@ Copy `.env.example` to `.env` and fill in your own API keys. **Never commit `.en
 
 ## Contributing your work
 
-Cohort members are encouraged to share projects. You contribute by **forking this repo and opening a pull request** that adds files to a single folder:
+Cohort members are encouraged to share their projects.
+
+Nobody gets push access to this repository — GitHub cannot grant write permission to a single folder. Instead you **fork the repo, add your work, and open a pull request**, which is how every open-source project on GitHub works. Your files must all go in one place:
 
 ```
-<week-folder>/community_contributions/<your-github-handle>/
+<week-folder>/community_contributions/<your-github-username>/
 ```
 
-PRs that touch anything else are rejected automatically by CI. Full instructions: [CONTRIBUTING.md](CONTRIBUTING.md).
+A GitHub Action rejects any pull request that touches anything else, and tells you exactly which files are the problem.
+
+### 📖 [**Read the full contributor guide → CONTRIBUTING.md**](CONTRIBUTING.md)
+
+Written for people who have never used GitHub before. It covers:
+
+- **Three routes** — browser-only (no terminal, no installs), command line, and GitHub Desktop
+- Forking, branching, committing and opening a PR, click by click
+- What to put in your folder, and what never to commit
+- Every automated check, what its error means, and how to fix it
+- Troubleshooting for the errors people actually hit — auth failures, rejected pushes, merge conflicts
+- A glossary and an FAQ
+
+**In a hurry?** Fork → branch → add files to your folder → pull request → wait for the green tick.
 
 ## License
 
