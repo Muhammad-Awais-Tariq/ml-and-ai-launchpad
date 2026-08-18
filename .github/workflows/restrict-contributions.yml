@@ -1,7 +1,11 @@
 name: Restrict contributions
 
-# Community PRs may only touch files inside a week*/community_contributions/ folder.
-# The repository owner and org members are exempt.
+# Community PRs may only touch files inside a
+# <week-folder>/community_contributions/<your-handle>/ directory.
+# The repository owner, org members, and collaborators are exempt.
+#
+# This job always runs (rather than being skipped for the maintainer) so it can
+# be used as a required status check without a "skipped" result blocking merges.
 
 on:
   pull_request:
@@ -13,14 +17,27 @@ permissions:
 
 jobs:
   check-paths:
+    name: check-paths
     runs-on: ubuntu-latest
-    if: >-
-      github.event.pull_request.author_association != 'OWNER' &&
-      github.event.pull_request.author_association != 'MEMBER' &&
-      github.event.pull_request.author_association != 'COLLABORATOR'
+    env:
+      ASSOCIATION: ${{ github.event.pull_request.author_association }}
     steps:
+      - name: Check for maintainer exemption
+        id: exempt
+        run: |
+          case "$ASSOCIATION" in
+            OWNER|MEMBER|COLLABORATOR)
+              echo "exempt=true" >> "$GITHUB_OUTPUT"
+              echo "Author association is $ASSOCIATION. Path restrictions do not apply."
+              ;;
+            *)
+              echo "exempt=false" >> "$GITHUB_OUTPUT"
+              echo "Author association is $ASSOCIATION. Enforcing path restrictions."
+              ;;
+          esac
+
       - name: List changed files
-        id: changed
+        if: steps.exempt.outputs.exempt == 'false'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
@@ -28,14 +45,15 @@ jobs:
         run: |
           gh api --paginate "repos/$REPO/pulls/$PR/files" --jq '.[].filename' > changed.txt
           echo "Changed files:"
-          cat changed.txt
+          sed 's/^/  - /' changed.txt
 
       - name: Enforce community_contributions path
+        if: steps.exempt.outputs.exempt == 'false'
         run: |
           # Allowed: week<NN>-<slug>/community_contributions/<handle>/<file>
           #      or: demo-day/community_contributions/<handle>/<file>
-          # The trailing "[^/]+/.+" requires your own subfolder, so the week's
-          # own community_contributions/README.md cannot be edited.
+          # The trailing "[^/]+/.+" requires your own subfolder, so a week's own
+          # community_contributions/README.md cannot be edited.
           pattern='^(week[0-9]{2}-[a-z0-9-]+|demo-day)/community_contributions/[^/]+/.+'
           bad=$(grep -vE "$pattern" changed.txt || true)
           if [ -n "$bad" ]; then
@@ -52,24 +70,41 @@ jobs:
           echo "All changed files are inside community_contributions. OK."
 
       - name: Block edits to other contributors' folders
+        if: steps.exempt.outputs.exempt == 'false'
         run: |
           # Each contributor gets one subfolder. A PR may only touch one.
           folders=$(cut -d/ -f1-3 changed.txt | sort -u)
-          count=$(echo "$folders" | wc -l | tr -d ' ')
+          count=$(printf '%s\n' "$folders" | grep -c .)
           if [ "$count" -gt 1 ]; then
             echo "::error::PR touches more than one contributor folder"
-            echo "$folders" | sed 's/^/  - /'
+            printf '%s\n' "$folders" | sed 's/^/  - /'
             echo "Open a separate PR per contributor folder."
             exit 1
           fi
           echo "Single contributor folder: $folders"
 
       - name: Reject secret-looking files
+        if: steps.exempt.outputs.exempt == 'false'
         run: |
-          bad=$(grep -iE '(^|/)(\.env($|\..*)|.*\.pem|.*\.key|api-keys?/)' changed.txt || true)
+          bad=$(grep -iE '(^|/)(\.env($|\..*)|[^/]*\.pem|[^/]*\.key|api-keys?/)' changed.txt || true)
           if [ -n "$bad" ]; then
             echo "::error::PR appears to contain secrets. Remove them and rotate the keys."
             echo "$bad" | sed 's/^/  - /'
             exit 1
           fi
           echo "No secret-looking filenames. OK."
+
+      - name: Reject large files
+        if: steps.exempt.outputs.exempt == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          # additions+deletions is a rough proxy; GitHub also hard-caps at 100 MB.
+          total=$(gh api "repos/$REPO/pulls/$PR" --jq '.additions + .deletions')
+          echo "Total changed lines: $total"
+          if [ "$total" -gt 200000 ]; then
+            echo "::error::PR is very large ($total lines). Link to datasets instead of committing them."
+            exit 1
+          fi
